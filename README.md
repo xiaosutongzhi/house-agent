@@ -8,9 +8,11 @@
 
 *图 1：【前端隐式获取用户意向】*
 
+
 <img width="1178" height="417" alt="image" src="https://github.com/user-attachments/assets/62366799-76ec-48cc-b992-fa66d52a005c" />
 
 *图 2：【通过rag模块进行政策长记忆获取】*
+
 
 <img width="1023" height="126" alt="image" src="https://github.com/user-attachments/assets/997df109-30d2-4638-af7d-ef621e66051c" />
 
@@ -30,9 +32,10 @@
 
 ## 🏗️ 架构概览
 
-<img width="1227" height="651" alt="系统架构图" src="[https://github.com/user-attachments/assets/35f2203c-6d09-4009-b8b1-f0597d204b71](https://github.com/user-attachments/assets/35f2203c-6d09-4009-b8b1-f0597d204b71)" />
 
-*图 3：【在这里补充针对架构图的解释，例如：系统主图流转逻辑，体现了 Supervisor 路由中枢与四大核心业务子图的调用关系。】*
+<img width="1448" height="951" alt="image" src="https://github.com/user-attachments/assets/c5969810-8e76-4325-83ad-399c2a537fb4" />
+
+*图 3：【系统主图流转逻辑， Supervisor 路由中枢与四大核心业务子图的调用。】*
 
 系统主要由以下核心模块流转：
 1. **入口与记忆**：解析请求并更新/提取长期偏好。
