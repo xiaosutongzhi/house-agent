@@ -4,17 +4,19 @@
 
 ## 📸 效果演示
 
-<img width="1311" height="498" alt="政策获取获取" src="[https://github.com/user-attachments/assets/0d373749-f79e-4c9c-9ff6-0612215cdc21](https://github.com/user-attachments/assets/0d373749-f79e-4c9c-9ff6-0612215cdc21)" />
-
-*图 1：【通过rag模块进行政策长记忆获取】*
-
-<img width="1032" height="129" alt="房源推荐演示" src="[https://github.com/user-attachments/assets/f9016043-473c-42c0-a7b2-6c4d3ccc5afe](https://github.com/user-attachments/assets/f9016043-473c-42c0-a7b2-6c4d3ccc5afe)" />
-
-*图 2：【双轨记忆查询（用户核心画像+情景记忆向量存储）+mcp的全局上下文，阳台房和采光好关联】*
-
 <img width="1805" height="1131" alt="image" src="https://github.com/user-attachments/assets/615ca010-2efe-4d48-8245-252ee1dd2132" />
 
-*图 3：【前端隐式获取用户意向】*
+*图 1：【前端隐式获取用户意向】*
+
+<img width="1178" height="417" alt="image" src="https://github.com/user-attachments/assets/62366799-76ec-48cc-b992-fa66d52a005c" />
+
+*图 2：【通过rag模块进行政策长记忆获取】*
+
+<img width="1023" height="126" alt="image" src="https://github.com/user-attachments/assets/997df109-30d2-4638-af7d-ef621e66051c" />
+
+*图 3：【双轨记忆查询（用户核心画像+情景记忆向量存储）+mcp的全局上下文，阳台房和采光好关联】*
+
+
 
 
 ## ✨ 核心特性
