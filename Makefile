@@ -1,5 +1,5 @@
 .PHONY: all format lint test tests test_watch integration_tests docker_tests help extended_tests \
-	streamlit cli cli_db mcp_client app_and_client seed_properties db_properties
+	streamlit cli cli_db studio mcp_client app_and_client seed_properties db_properties
 
 # Default target executed when no arguments are given to make.
 all: help
@@ -30,6 +30,10 @@ cli:
 # Most common interview/demo mode: skip DB/store dependencies
 cli_db:
 	$(LANGSMITH_ENV_PREFIX) $(PYTHON) $(CLI_APP) --disable-db --user-id $(USER_ID) $(CLI_ARGS)
+
+# LangGraph Studio / local dev server
+studio:
+	$(LANGSMITH_ENV_PREFIX) langgraph dev
 
 # MCP demo client (spawns MCP server via stdio)
 MCP_CLIENT_APP ?= src/mcp/mcpclient.py
@@ -193,6 +197,7 @@ help:
 	@echo 'streamlit                    - run Streamlit MCP frontend (default :8501)'
 	@echo 'cli                          - run CLI agent (USER_ID=..., CLI_ARGS=...)'
 	@echo 'cli_db                       - run CLI agent with --disable-db (demo-safe)'
+	@echo 'studio                       - run LangGraph dev server (for LangGraph Studio)'
 	@echo 'mcp_client                   - run MCP client (spawns MCP stdio server)'
 	@echo 'app_and_client               - start Streamlit + run MCP client once'
 	@echo 'seed_properties              - init/seed property_listings into MySQL (fallback if DB disabled)'

@@ -1,0 +1,47 @@
+---
+config:
+  flowchart:
+    curve: linear
+---
+graph TD;
+	__start__([<p>__start__</p>]):::first
+	memory_manager(memory_manager)
+	supervisor_router(supervisor_router)
+	empathy_generator(empathy_generator)
+	__end__([<p>__end__</p>]):::last
+	__start__ --> memory_manager;
+	handoff_subgraph\3ahandoff_reserve_node --> supervisor_router;
+	memory_manager --> supervisor_router;
+	policy_rag_subgraph\3apolicy_generate --> supervisor_router;
+	recommend_subgraph\3arecommend_finalize --> supervisor_router;
+	supervisor_router -.-> __end__;
+	supervisor_router -.-> empathy_generator;
+	supervisor_router -.-> handoff_subgraph\3ahandoff_reserve_node;
+	supervisor_router -.-> policy_rag_subgraph\3apolicy_rewrite;
+	supervisor_router -.-> recommend_subgraph\3a__start__;
+	empathy_generator --> __end__;
+	subgraph recommend_subgraph
+	recommend_subgraph\3a__start__(<p>__start__</p>)
+	recommend_subgraph\3arecommend_llm(recommend_llm)
+	recommend_subgraph\3arecommend_tools(recommend_tools)
+	recommend_subgraph\3arecommend_finalize(recommend_finalize)
+	recommend_subgraph\3a__start__ --> recommend_subgraph\3arecommend_llm;
+	recommend_subgraph\3arecommend_llm -. &nbsp;__end__&nbsp; .-> recommend_subgraph\3arecommend_finalize;
+	recommend_subgraph\3arecommend_llm -. &nbsp;tools&nbsp; .-> recommend_subgraph\3arecommend_tools;
+	recommend_subgraph\3arecommend_tools --> recommend_subgraph\3arecommend_llm;
+	end
+	subgraph policy_rag_subgraph
+	policy_rag_subgraph\3apolicy_rewrite(policy_rewrite)
+	policy_rag_subgraph\3apolicy_retrieve(policy_retrieve)
+	policy_rag_subgraph\3apolicy_rerank(policy_rerank)
+	policy_rag_subgraph\3apolicy_generate(policy_generate)
+	policy_rag_subgraph\3apolicy_rerank --> policy_rag_subgraph\3apolicy_generate;
+	policy_rag_subgraph\3apolicy_retrieve --> policy_rag_subgraph\3apolicy_rerank;
+	policy_rag_subgraph\3apolicy_rewrite --> policy_rag_subgraph\3apolicy_retrieve;
+	end
+	subgraph handoff_subgraph
+	handoff_subgraph\3ahandoff_reserve_node(handoff_reserve_node)
+	end
+	classDef default fill:#f2f0ff,line-height:1.2
+	classDef first fill-opacity:0
+	classDef last fill:#bfb6fc

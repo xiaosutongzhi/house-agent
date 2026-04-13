@@ -1,0 +1,38 @@
+{
+  "node_count": 3,
+  "edge_count": 2,
+  "nodes": [
+    {
+      "id": "__start__",
+      "name": "__start__",
+      "metadata": null,
+      "data_type": "RunnableCallable"
+    },
+    {
+      "id": "extend_node",
+      "name": "extend_node",
+      "metadata": null,
+      "data_type": "RunnableCallable"
+    },
+    {
+      "id": "__end__",
+      "name": "__end__",
+      "metadata": null,
+      "data_type": "NoneType"
+    }
+  ],
+  "edges": [
+    {
+      "source": "__start__",
+      "target": "extend_node",
+      "conditional": false,
+      "data": null
+    },
+    {
+      "source": "extend_node",
+      "target": "__end__",
+      "conditional": false,
+      "data": null
+    }
+  ]
+}

@@ -18,6 +18,16 @@ class UserProfile(TypedDict, total=False):
     orientation: str
     soft_preferences: list[str]
     emotion: str
+    interested_property_id: str
+    interested_property_title: str
+    interested_property_price: float
+    interested_property_features: list[str]
+    mcp_interested_property_id: str
+    mcp_interested_property_title: str
+    mcp_interested_property_price: float
+    mcp_interested_property_features: list[str]
+    user_input_interested_property_ids: list[str]
+    user_input_interested_property_titles: list[str]
 
 
 class AgentOutcomes(TypedDict, total=False):
@@ -40,6 +50,11 @@ class State(MessagesState):
     emotion_label: str
     intent_level: str
     route: str
+
+    # policy_rag 子图中间态
+    policy_query: dict[str, Any]
+    policy_contexts: list[str]
+    policy_ranked_contexts: list[str]
 
 
 # 私有状态

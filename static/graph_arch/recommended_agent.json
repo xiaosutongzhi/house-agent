@@ -1,0 +1,68 @@
+{
+  "node_count": 5,
+  "edge_count": 5,
+  "nodes": [
+    {
+      "id": "__start__",
+      "name": "__start__",
+      "metadata": null,
+      "data_type": "RunnableCallable"
+    },
+    {
+      "id": "recommend_llm",
+      "name": "recommend_llm",
+      "metadata": null,
+      "data_type": "RunnableCallable"
+    },
+    {
+      "id": "recommend_tools",
+      "name": "recommend_tools",
+      "metadata": null,
+      "data_type": "ToolNode"
+    },
+    {
+      "id": "recommend_finalize",
+      "name": "recommend_finalize",
+      "metadata": null,
+      "data_type": "RunnableCallable"
+    },
+    {
+      "id": "__end__",
+      "name": "__end__",
+      "metadata": null,
+      "data_type": "NoneType"
+    }
+  ],
+  "edges": [
+    {
+      "source": "__start__",
+      "target": "recommend_llm",
+      "conditional": false,
+      "data": null
+    },
+    {
+      "source": "recommend_llm",
+      "target": "recommend_finalize",
+      "conditional": true,
+      "data": "__end__"
+    },
+    {
+      "source": "recommend_llm",
+      "target": "recommend_tools",
+      "conditional": true,
+      "data": "tools"
+    },
+    {
+      "source": "recommend_tools",
+      "target": "recommend_llm",
+      "conditional": false,
+      "data": null
+    },
+    {
+      "source": "recommend_finalize",
+      "target": "__end__",
+      "conditional": false,
+      "data": null
+    }
+  ]
+}

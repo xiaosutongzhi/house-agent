@@ -3,6 +3,7 @@ import random
 import uuid
 import json
 import ast
+import re
 from typing import Any, Optional
 
 from dotenv import load_dotenv
@@ -417,13 +418,84 @@ def Vector_Search_Tool(
 
 def recommend_llm_node(state: dict, runtime: Runtime[ContextSchema]):
     """ReAct 的 LLM 决策节点：决定是否继续调用工具。"""
-    user_profile = state.get("user_profile", {}) or {}
+    user_profile = dict(state.get("user_profile", {}) or {})
     mcp_context = runtime.context.get("mcp_context") or runtime.context.get("web_mcp_state") or {}
+    user_messages = filter_messages(state.get("messages") or [], include_types="human")
+    last_user_text = str(user_messages[-1].content) if user_messages else ""
+    store = get_property_store()
+    all_rows = store.list_properties()
+
+    def _find_row_by_title(title: str) -> dict[str, Any] | None:
+        q = str(title or "").strip()
+        if not q:
+            return None
+        for row in all_rows:
+            row_title = str(row.get("title") or "")
+            if row_title and (q in row_title or row_title in q):
+                return row
+        return None
+
+    def _extract_user_interest_rows(text: str) -> list[dict[str, Any]]:
+        found: list[dict[str, Any]] = []
+        seen: set[str] = set()
+        for row in all_rows:
+            title = str(row.get("title") or "")
+            rid = str(row.get("id") or "")
+            if not title or not rid:
+                continue
+            if title in text and rid not in seen:
+                seen.add(rid)
+                found.append(row)
+        return found
+
     soft_preferences = list(user_profile.get("soft_preferences") or [])
+    focus_property = None
+    mcp_interest_row: dict[str, Any] | None = None
     if isinstance(mcp_context, dict):
         focus_property = mcp_context.get("focus_property")
+        if not focus_property:
+            biz = mcp_context.get("business_context")
+            if isinstance(biz, dict):
+                focus_property = biz.get("viewing_property")
+                raw_price = str(biz.get("price") or "")
+                m = re.search(r"(\d+(?:\.\d+)?)", raw_price)
+                if m:
+                    try:
+                        user_profile["mcp_interested_property_price"] = float(m.group(1))
+                    except Exception:
+                        pass
         if focus_property:
             soft_preferences.append(f"关注楼盘:{focus_property}")
+
+    if focus_property:
+        user_profile["mcp_interested_property_title"] = str(focus_property)
+        mcp_interest_row = _find_row_by_title(str(focus_property))
+        if mcp_interest_row:
+            user_profile["mcp_interested_property_id"] = str(mcp_interest_row.get("id") or "")
+            user_profile["mcp_interested_property_title"] = str(mcp_interest_row.get("title") or focus_property)
+            user_profile["mcp_interested_property_price"] = float(mcp_interest_row.get("price") or 0)
+            user_profile["mcp_interested_property_features"] = list(mcp_interest_row.get("features") or [])
+
+    user_interest_rows = _extract_user_interest_rows(last_user_text)
+    if user_interest_rows:
+        user_profile["user_input_interested_property_ids"] = [str(r.get("id")) for r in user_interest_rows if r.get("id")]
+        user_profile["user_input_interested_property_titles"] = [
+            str(r.get("title")) for r in user_interest_rows if r.get("title")
+        ]
+        for r in user_interest_rows:
+            t = str(r.get("title") or "")
+            if t:
+                soft_preferences.append(f"用户提及楼盘:{t}")
+
+    # 兼容已有字段：优先 MCP，再用用户主动提及
+    primary_interest = mcp_interest_row or (user_interest_rows[0] if user_interest_rows else None)
+    if primary_interest:
+        user_profile["interested_property_id"] = str(primary_interest.get("id") or "")
+        user_profile["interested_property_title"] = str(primary_interest.get("title") or "")
+        user_profile["interested_property_price"] = float(primary_interest.get("price") or 0)
+        user_profile["interested_property_features"] = list(primary_interest.get("features") or [])
+
+    user_profile["soft_preferences"] = list(dict.fromkeys([x for x in soft_preferences if x]))
 
     system_prompt = (
         "你是VIP购房导购推荐专家，使用 ReAct 决策。\n"
@@ -436,6 +508,8 @@ def recommend_llm_node(state: dict, runtime: Runtime[ContextSchema]):
     context_prompt = (
         f"当前结构化画像: {user_profile}\n"
         f"隐式交互上下文: {mcp_context}\n"
+        f"MCP兴趣房源: {user_profile.get('mcp_interested_property_title') or '无'}\n"
+        f"用户主动提及房源: {user_profile.get('user_input_interested_property_titles') or []}\n"
         f"软偏好建议词: {';'.join(soft_preferences)}"
     )
 
@@ -447,7 +521,7 @@ def recommend_llm_node(state: dict, runtime: Runtime[ContextSchema]):
         ]
         + state.get("messages", [])
     )
-    return {"messages": [response]}
+    return {"messages": [response], "user_profile": user_profile}
 
 
 def recommend_finalize_node(state: dict):
@@ -508,6 +582,101 @@ def recommend_finalize_node(state: dict):
     store = get_property_store()
     db_rows = store.list_properties()
     by_id = {str(x.get("id")): x for x in db_rows if x.get("id")}
+    title_rows = [x for x in db_rows if x.get("title")]
+
+    user_profile = state.get("user_profile") or {}
+    user_messages = filter_messages(messages, include_types="human")
+    last_user_text = str(user_messages[-1].content) if user_messages else ""
+
+    def _row_text(row: dict[str, Any]) -> str:
+        return f"{row.get('title', '')} {' '.join(row.get('features') or [])} {row.get('district', '')}"
+
+    def _find_row_by_id_or_title(pid: str | None = None, title: str | None = None) -> dict[str, Any] | None:
+        if pid:
+            row = by_id.get(str(pid))
+            if row:
+                return row
+        q = str(title or "").strip()
+        if q:
+            for r in title_rows:
+                t = str(r.get("title") or "")
+                if t and (q in t or t in q):
+                    return r
+        return None
+
+    mcp_interest_row = _find_row_by_id_or_title(
+        user_profile.get("mcp_interested_property_id"),
+        user_profile.get("mcp_interested_property_title"),
+    )
+
+    user_interest_rows: list[dict[str, Any]] = []
+    user_interest_seen: set[str] = set()
+    for pid in user_profile.get("user_input_interested_property_ids") or []:
+        row = _find_row_by_id_or_title(pid, None)
+        rid = str(row.get("id") or "") if row else ""
+        if row and rid and rid not in user_interest_seen:
+            user_interest_seen.add(rid)
+            user_interest_rows.append(row)
+    for title in user_profile.get("user_input_interested_property_titles") or []:
+        row = _find_row_by_id_or_title(None, title)
+        rid = str(row.get("id") or "") if row else ""
+        if row and rid and rid not in user_interest_seen:
+            user_interest_seen.add(rid)
+            user_interest_rows.append(row)
+
+    # 兼容老字段（兜底）
+    if not mcp_interest_row and not user_interest_rows:
+        legacy_row = _find_row_by_id_or_title(
+            user_profile.get("interested_property_id"),
+            user_profile.get("interested_property_title"),
+        )
+        if legacy_row:
+            user_interest_rows.append(legacy_row)
+
+    interest_row = mcp_interest_row or (user_interest_rows[0] if user_interest_rows else None)
+    all_interest_rows = []
+    all_seen: set[str] = set()
+    for row in ([mcp_interest_row] if mcp_interest_row else []) + user_interest_rows:
+        rid = str(row.get("id") or "")
+        if rid and rid not in all_seen:
+            all_seen.add(rid)
+            all_interest_rows.append(row)
+
+    def _infer_hard_constraints() -> dict[str, Any]:
+        infer_bedrooms = user_profile.get("bedrooms")
+        if re.search(r"(两\s*房|2\s*房|二\s*房|两\s*室|2\s*室|二\s*室)", last_user_text):
+            infer_bedrooms = 2
+        elif re.search(r"(三\s*房|3\s*房|三\s*室|3\s*室)", last_user_text):
+            infer_bedrooms = 3
+
+        infer_city = user_profile.get("city")
+        if not infer_city and "广州" in last_user_text:
+            infer_city = "广州"
+
+        infer_budget_min = user_profile.get("budget_min")
+        infer_budget_max = user_profile.get("budget_max")
+        m1 = re.search(r"(\d+(?:\.\d+)?)\s*万\s*(以下|以内)", last_user_text)
+        if m1:
+            infer_budget_min = 0
+            infer_budget_max = float(m1.group(1))
+        m2 = re.search(r"(\d+(?:\.\d+)?)\s*[-到~]\s*(\d+(?:\.\d+)?)\s*万", last_user_text)
+        if m2:
+            infer_budget_min = float(m2.group(1))
+            infer_budget_max = float(m2.group(2))
+
+        district = user_profile.get("district")
+        if not district and interest_row:
+            district = interest_row.get("district")
+
+        return {
+            "budget_min": infer_budget_min,
+            "budget_max": infer_budget_max,
+            "city": infer_city,
+            "bedrooms": infer_bedrooms,
+            "district": district,
+        }
+
+    hard_constraints = _infer_hard_constraints()
 
     candidate_ids = [str(x) for x in (latest_sql.get("candidate_ids") or []) if str(x)]
     candidate_set = set(candidate_ids)
@@ -548,6 +717,180 @@ def recommend_finalize_node(state: dict):
                 break
 
     has_exact_match = bool(candidate_ids)
+
+    # 若工具链没有给出 candidate_ids，尝试基于历史画像 + 本轮用户问句做确定性兜底检索
+    if not validated and not has_exact_match:
+        infer_soft_prefs = list(user_profile.get("soft_preferences") or [])
+        if "宠物" in last_user_text and "可养宠" not in infer_soft_prefs:
+            infer_soft_prefs.append("可养宠")
+        if any(x in last_user_text for x in ["阳光", "采光", "南向"]):
+            infer_soft_prefs.append("采光")
+
+        inferred_sql = store.search_sql(
+            budget_min=hard_constraints.get("budget_min"),
+            budget_max=hard_constraints.get("budget_max"),
+            city=hard_constraints.get("city"),
+            bedrooms=hard_constraints.get("bedrooms"),
+            district=hard_constraints.get("district"),
+        )
+        inferred_ids = [str(x) for x in (inferred_sql.get("candidate_ids") or []) if str(x)]
+        if inferred_ids:
+            inferred_vec = store.vector_search(
+                query_soft_prefs=";".join(infer_soft_prefs) if infer_soft_prefs else "",
+                candidate_ids=inferred_ids,
+                top_k=3,
+            )
+
+            for item in inferred_vec:
+                pid = str(item.get("id") or "")
+                if not pid or pid in seen_ids:
+                    continue
+                db_item = by_id.get(pid)
+                if not db_item:
+                    continue
+                db_price = _safe_float(db_item.get("price"))
+                item_price = _safe_float(item.get("price"))
+                if item_price is not None and db_price is not None and abs(item_price - db_price) > 1e-6:
+                    continue
+                seen_ids.add(pid)
+                validated.append(db_item)
+                if len(validated) >= 3:
+                    break
+
+            if not validated:
+                for pid in inferred_ids:
+                    if pid in seen_ids:
+                        continue
+                    db_item = by_id.get(pid)
+                    if not db_item:
+                        continue
+                    seen_ids.add(pid)
+                    validated.append(db_item)
+                    if len(validated) >= 3:
+                        break
+
+            has_exact_match = bool(validated)
+
+    # ------- 多情景拆分推荐（每个情景单独给 2 套） -------
+    scenario_rules: list[tuple[str, str, list[str]]] = [
+        ("sunlight", "阳光采光", ["阳光", "采光", "南向", "朝南", "南北通透"]),
+        ("balcony", "阳台", ["阳台", "双阳台", "大阳台", "生活阳台"]),
+        ("pet", "养宠", ["宠物", "养宠", "可养宠", "可养猫", "可养狗", "猫", "狗"]),
+    ]
+
+    soft_pref_text = " ".join(str(x) for x in (user_profile.get("soft_preferences") or []))
+    source_text = f"{last_user_text} {soft_pref_text}"
+    for ir in all_interest_rows:
+        source_text += " " + _row_text(ir)
+
+    active_scenarios: list[tuple[str, str, list[str]]] = []
+    for key, label, kws in scenario_rules:
+        if any(k in source_text for k in kws):
+            active_scenarios.append((key, label, kws))
+
+    base_candidate_ids = candidate_ids[:]
+    if not base_candidate_ids:
+        inferred = store.search_sql(
+            budget_min=hard_constraints.get("budget_min"),
+            budget_max=hard_constraints.get("budget_max"),
+            city=hard_constraints.get("city"),
+            bedrooms=hard_constraints.get("bedrooms"),
+            district=hard_constraints.get("district"),
+        )
+        base_candidate_ids = [str(x) for x in (inferred.get("candidate_ids") or []) if str(x)]
+
+    base_rows = [by_id[i] for i in base_candidate_ids if i in by_id]
+
+    def _match_keywords(row: dict[str, Any], kws: list[str]) -> bool:
+        text = _row_text(row)
+        return any(k in text for k in kws)
+
+    def _scenario_pick(kws: list[str], *, top_n: int = 2) -> list[dict[str, Any]]:
+        if not base_candidate_ids:
+            return []
+
+        query = ";".join(kws)
+        vec = store.vector_search(query_soft_prefs=query, candidate_ids=base_candidate_ids, top_k=max(6, top_n * 3))
+        chosen: list[dict[str, Any]] = []
+        chosen_ids: set[str] = set()
+
+        # 先收取关键词真匹配
+        for it in vec:
+            pid = str(it.get("id") or "")
+            if not pid or pid in chosen_ids or pid not in by_id:
+                continue
+            row = by_id[pid]
+            if not _match_keywords(row, kws):
+                continue
+            chosen_ids.add(pid)
+            chosen.append(row)
+            if len(chosen) >= top_n:
+                return chosen
+
+        # 再补齐：候选集中关键词匹配
+        for row in base_rows:
+            pid = str(row.get("id") or "")
+            if not pid or pid in chosen_ids:
+                continue
+            if not _match_keywords(row, kws):
+                continue
+            chosen_ids.add(pid)
+            chosen.append(row)
+            if len(chosen) >= top_n:
+                return chosen
+
+        return chosen
+
+    scenario_results: list[dict[str, Any]] = []
+    if active_scenarios:
+        for _, label, kws in active_scenarios:
+            picks = _scenario_pick(kws, top_n=2)
+            scenario_results.append({"scenario": label, "items": picks, "keywords": kws})
+
+    # 同时满足全部情景的候选（用于给出“无法同时满足”的解释）
+    combined_items: list[dict[str, Any]] = []
+    if len(active_scenarios) >= 2 and base_rows:
+        for row in base_rows:
+            if all(_match_keywords(row, kws) for _, _, kws in active_scenarios):
+                combined_items.append(row)
+        combined_items = combined_items[:2]
+
+    def _similar_to_interest(top_n: int = 3) -> list[dict[str, Any]]:
+        if not all_interest_rows:
+            return []
+        interest_ids = {str(x.get("id") or "") for x in all_interest_rows}
+
+        pool = base_rows or db_rows
+        scored: list[tuple[float, dict[str, Any]]] = []
+        for row in pool:
+            rid = str(row.get("id") or "")
+            if not rid or rid in interest_ids:
+                continue
+            score = 0.0
+            r_text = _row_text(row)
+            for ir in all_interest_rows:
+                i_price = _safe_float(ir.get("price"))
+                i_bed = ir.get("bedrooms")
+                i_dist = ir.get("district") or ir.get("region")
+                if i_dist and (row.get("district") == i_dist or row.get("region") == i_dist):
+                    score += 2.0
+                if i_bed and row.get("bedrooms") == i_bed:
+                    score += 1.5
+                rp = _safe_float(row.get("price"))
+                if i_price is not None and rp is not None:
+                    score += max(0.0, 1.5 - abs(i_price - rp) / 120.0)
+                i_text = _row_text(ir)
+                same_kw = 0
+                for kw in ["阳台", "采光", "南向", "地铁", "可养宠", "可养猫", "南北通透"]:
+                    if kw in i_text and kw in r_text:
+                        same_kw += 1
+                score += float(same_kw)
+            scored.append((score, row))
+        scored.sort(key=lambda x: x[0], reverse=True)
+        return [r for _, r in scored[:top_n]]
+
+    similar_interest_items = _similar_to_interest(3)
+
     fallback_pool = [x for x in db_rows if str(x.get("id")) not in seen_ids]
     fallback_items: list[dict[str, Any]] = []
     if not has_exact_match and fallback_pool:
@@ -561,11 +904,63 @@ def recommend_finalize_node(state: dict):
             f"｜区域:{x.get('district') or x.get('region') or ''}"
         )
 
-    if validated:
-        lines = ["为您匹配到以下真实房源（仅展示工具结果且已做ID+价格校验）："]
+    if scenario_results:
+        lines: list[str] = []
+        if len(active_scenarios) >= 2 and not combined_items:
+            lines.append("没有找到可同时满足您多个情景需求的单一房源，我按每个情景分别给您推荐，方便对比决策：")
+        elif combined_items:
+            lines.append("找到了可同时覆盖您多个情景诉求的房源：")
+            lines.extend(_fmt_item(x) for x in combined_items)
+
+        if mcp_interest_row:
+            lines.append(
+                f"我看到您在页面浏览了「{mcp_interest_row.get('title')}」，下面也结合该房源给出类似推荐。"
+            )
+        if user_interest_rows:
+            user_titles = "、".join(str(x.get("title")) for x in user_interest_rows[:3])
+            lines.append(f"您在对话中主动提到的房源有：{user_titles}。我已一并纳入推荐。")
+
+        for g in scenario_results:
+            group_items = g.get("items") or []
+            lines.append(f"\n【{g['scenario']}情景】")
+            if group_items:
+                lines.extend(_fmt_item(x) for x in group_items)
+            else:
+                lines.append("- 该情景下暂未检索到满足硬约束的房源")
+
+        if similar_interest_items:
+            lines.append("\n【基于您关注房源的相似推荐】")
+            lines.extend(_fmt_item(x) for x in similar_interest_items)
+
+        strict_final_text = "\n".join(lines)
+        status = "scenario_split"
+    elif validated:
+        lines = []
+        if mcp_interest_row:
+            lines.append(
+                f"我看到您在页面浏览了「{mcp_interest_row.get('title')}」，结合该房源为您推荐以下更匹配的选择："
+            )
+        elif user_interest_rows:
+            user_titles = "、".join(str(x.get("title")) for x in user_interest_rows[:3])
+            lines.append(f"我看到您在对话中提到「{user_titles}」，结合这些兴趣房源为您推荐：")
+        else:
+            lines.append("为您匹配到以下真实房源（仅展示工具结果且已做ID+价格校验）：")
         lines.extend(_fmt_item(x) for x in validated)
+        if interest_row and similar_interest_items:
+            lines.append("\n【基于您关注房源的相似推荐】")
+            lines.extend(_fmt_item(x) for x in similar_interest_items)
         strict_final_text = "\n".join(lines)
         status = "success"
+    elif similar_interest_items:
+        lines = ["目前没有找到完全匹配您全部条件的房源。"]
+        if mcp_interest_row:
+            lines.append(f"我看到您在页面浏览了「{mcp_interest_row.get('title')}」，先给您推荐几套相似房源：")
+        elif user_interest_rows:
+            user_titles = "、".join(str(x.get("title")) for x in user_interest_rows[:3])
+            lines.append(f"我看到您在对话中提到「{user_titles}」，先给您推荐几套相似房源：")
+        lines.extend(_fmt_item(x) for x in similar_interest_items)
+        strict_final_text = "\n".join(lines)
+        status = "interest_fallback"
     elif fallback_items:
         lines = [
             "目前没有完全符合您条件的房源。",
@@ -584,6 +979,16 @@ def recommend_finalize_node(state: dict):
         "strict_mode": True,
         "validated_ids": [str(x.get("id")) for x in validated],
         "fallback_ids": [str(x.get("id")) for x in fallback_items],
+        "interest_property_id": str(interest_row.get("id")) if interest_row else None,
+        "mcp_interest_property_id": str(mcp_interest_row.get("id")) if mcp_interest_row else None,
+        "user_input_interest_property_ids": [str(x.get("id")) for x in user_interest_rows],
+        "scenario_groups": [
+            {
+                "scenario": g.get("scenario"),
+                "ids": [str(x.get("id")) for x in (g.get("items") or [])],
+            }
+            for g in scenario_results
+        ],
         "llm_raw_text": final_ai.content if final_ai else "",
         "tool_observations": tool_observations,
     }

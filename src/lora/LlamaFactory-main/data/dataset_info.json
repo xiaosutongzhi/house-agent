@@ -7,6 +7,26 @@
       "response": "output"
     }
   },
+
+  "house_agent_schema": {
+    "file_name": "house_agent_schema_sft.jsonl",
+    "columns": {
+      "prompt": "instruction",
+      "query": "input",
+      "response": "output"
+    }
+  },
+
+  "house_agent_pref": {
+    "file_name": "house_agent_pref.json",
+    "ranking": true,
+    "formatting": "sharegpt",
+    "columns": {
+      "messages": "conversations",
+      "chosen": "chosen",
+      "rejected": "rejected"
+    }
+  },
   "identity": {
     "file_name": "identity.json"
   },

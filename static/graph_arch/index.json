@@ -1,0 +1,15 @@
+{
+  "config": "/dmci_user/szm/workspace/house_agent/house-agent/langgraph.json",
+  "output_dir": "/dmci_user/szm/workspace/house_agent/house-agent/static/graph_arch",
+  "xray": true,
+  "graphs": {
+    "house_agent": {
+      "graph_ref": "./src/agent/graph.py:graph",
+      "mermaid_file": "/dmci_user/szm/workspace/house_agent/house-agent/static/graph_arch/house_agent.mmd",
+      "meta_file": "/dmci_user/szm/workspace/house_agent/house-agent/static/graph_arch/house_agent.json",
+      "png_file": "/dmci_user/szm/workspace/house_agent/house-agent/static/graph_arch/house_agent.png",
+      "node_count": 14,
+      "edge_count": 18
+    }
+  }
+}

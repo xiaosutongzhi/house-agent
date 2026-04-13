@@ -411,42 +411,31 @@ def memory_manager_node(state: State, runtime: Runtime[ContextSchema], *, store:
         "请输出 structured_data 与 semantic_data。"
     )
 
-    extraction: PreferenceExtraction | None = None
+    json_prompt = (
+        "请仅输出JSON对象，不要输出其它文本。必须包含 structured_data 与 semantic_data 两个字段。"
+        "structured_data 可包含：preferred_city, preferred_district, budget_min, budget_max, room_type, orientation, others, tags。"
+        "semantic_data 为字符串数组。"
+    )
     try:
-        extractor = model.with_structured_output(PreferenceExtraction)
-        extraction = extractor.invoke(
-            [SystemMessage(content=extract_system), HumanMessage(content=extract_user)]
+        raw = model.invoke(
+            [
+                SystemMessage(content=extract_system + "\n" + json_prompt),
+                HumanMessage(content=extract_user),
+            ]
+        )
+        raw_obj = _extract_json_object(getattr(raw, "content", ""))
+        structured_raw = raw_obj.get("structured_data") or {}
+        semantic_raw = raw_obj.get("semantic_data") or []
+        if isinstance(semantic_raw, str):
+            semantic_raw = [semantic_raw]
+        if not isinstance(semantic_raw, list):
+            semantic_raw = []
+        extraction = PreferenceExtraction(
+            structured_data=LongTermMemory(**structured_raw) if isinstance(structured_raw, dict) else LongTermMemory(),
+            semantic_data=[str(x).strip() for x in semantic_raw if str(x).strip()],
         )
     except Exception:
-        extraction = None
-
-    # 结构化输出兜底：JSON
-    if extraction is None:
-        json_prompt = (
-            "请仅输出JSON对象，不要输出其它文本。必须包含 structured_data 与 semantic_data 两个字段。"
-            "structured_data 可包含：preferred_city, preferred_district, budget_min, budget_max, room_type, orientation, others, tags。"
-            "semantic_data 为字符串数组。"
-        )
-        try:
-            raw = model.invoke(
-                [
-                    SystemMessage(content=extract_system + "\n" + json_prompt),
-                    HumanMessage(content=extract_user),
-                ]
-            )
-            raw_obj = _extract_json_object(getattr(raw, "content", ""))
-            structured_raw = raw_obj.get("structured_data") or {}
-            semantic_raw = raw_obj.get("semantic_data") or []
-            if isinstance(semantic_raw, str):
-                semantic_raw = [semantic_raw]
-            if not isinstance(semantic_raw, list):
-                semantic_raw = []
-            extraction = PreferenceExtraction(
-                structured_data=LongTermMemory(**structured_raw) if isinstance(structured_raw, dict) else LongTermMemory(),
-                semantic_data=[str(x).strip() for x in semantic_raw if str(x).strip()],
-            )
-        except Exception:
-            extraction = PreferenceExtraction()
+        extraction = PreferenceExtraction()
 
     structured_update = _normalize_memory_update(extraction.structured_data.model_dump(exclude_none=True))
     semantic_fragments = [s for s in (extraction.semantic_data or []) if s and s.strip()]
@@ -491,7 +480,18 @@ def memory_manager_node(state: State, runtime: Runtime[ContextSchema], *, store:
     soft_from_memory = merged.get("tags") or []
     if isinstance(soft_from_memory, str):
         soft_from_memory = [soft_from_memory]
-    implicit_focus = mcp_context.get("focus_property") if isinstance(mcp_context, dict) else None
+    implicit_focus = None
+    interested_property_price = None
+    if isinstance(mcp_context, dict):
+        implicit_focus = mcp_context.get("focus_property")
+        if not implicit_focus:
+            biz = mcp_context.get("business_context")
+            if isinstance(biz, dict):
+                implicit_focus = biz.get("viewing_property")
+                raw_price = str(biz.get("price") or "")
+                m = re.search(r"(\d+(?:\.\d+)?)", raw_price)
+                if m:
+                    interested_property_price = _safe_float(m.group(1))
     if implicit_focus:
         soft_from_memory = list(dict.fromkeys([*soft_from_memory, f"关注楼盘:{implicit_focus}"]))
 
@@ -504,6 +504,10 @@ def memory_manager_node(state: State, runtime: Runtime[ContextSchema], *, store:
         "orientation": merged.get("orientation"),
         "soft_preferences": [x for x in soft_from_memory if x],
         "emotion": state.get("emotion_label", "neutral"),
+        "mcp_interested_property_title": implicit_focus,
+        "mcp_interested_property_price": interested_property_price,
+        "interested_property_title": implicit_focus,
+        "interested_property_price": interested_property_price,
     }
 
     return {
@@ -550,6 +554,17 @@ def _normalize_route(value: str | None, user_text: str) -> str:
     v = (value or "").strip().lower()
     t = (user_text or "").lower()
 
+    policy_terms = ["政策", "税", "契税", "增值税", "个税"]
+    property_terms = ["房", "房子", "房源", "楼盘", "这个房子"]
+
+    # 只要明确在问政策/税费，优先走政策子图。
+    if any(k in t for k in policy_terms):
+        return "POLICY_RAG"
+
+    # 楼盘/房源语境下的“优惠”且不含政策词，走推荐子图。
+    if "优惠" in t and any(k in t for k in property_terms):
+        return "RECOMMEND"
+
     if any(k in v for k in ["policy", "政策", "税", "契税", "增值税", "个税"]):
         return "POLICY_RAG"
     if any(k in v for k in ["reserve", "预订", "下单", "工单", "预约", "人工"]):
@@ -562,7 +577,7 @@ def _normalize_route(value: str | None, user_text: str) -> str:
         return "END"
 
     # 兜底：根据用户原始问题判断
-    if any(k in t for k in ["政策", "税", "契税", "增值税", "个税", "优惠"]):
+    if any(k in t for k in policy_terms):
         return "POLICY_RAG"
     if any(k in t for k in ["预订", "下单", "预约", "工单", "人工"]):
         return "HANDOFF"

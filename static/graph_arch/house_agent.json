@@ -1,0 +1,200 @@
+{
+  "node_count": 14,
+  "edge_count": 18,
+  "nodes": [
+    {
+      "id": "__start__",
+      "name": "__start__",
+      "metadata": null,
+      "data_type": "RunnableCallable"
+    },
+    {
+      "id": "memory_manager",
+      "name": "memory_manager",
+      "metadata": null,
+      "data_type": "RunnableCallable"
+    },
+    {
+      "id": "supervisor_router",
+      "name": "supervisor_router",
+      "metadata": null,
+      "data_type": "RunnableCallable"
+    },
+    {
+      "id": "empathy_generator",
+      "name": "empathy_generator",
+      "metadata": null,
+      "data_type": "RunnableCallable"
+    },
+    {
+      "id": "__end__",
+      "name": "__end__",
+      "metadata": null,
+      "data_type": "NoneType"
+    },
+    {
+      "id": "recommend_subgraph:__start__",
+      "name": "__start__",
+      "metadata": null,
+      "data_type": "RunnableCallable"
+    },
+    {
+      "id": "recommend_subgraph:recommend_llm",
+      "name": "recommend_llm",
+      "metadata": null,
+      "data_type": "RunnableCallable"
+    },
+    {
+      "id": "recommend_subgraph:recommend_tools",
+      "name": "recommend_tools",
+      "metadata": null,
+      "data_type": "ToolNode"
+    },
+    {
+      "id": "recommend_subgraph:recommend_finalize",
+      "name": "recommend_finalize",
+      "metadata": null,
+      "data_type": "RunnableCallable"
+    },
+    {
+      "id": "policy_rag_subgraph:policy_rewrite",
+      "name": "policy_rewrite",
+      "metadata": null,
+      "data_type": "RunnableCallable"
+    },
+    {
+      "id": "policy_rag_subgraph:policy_retrieve",
+      "name": "policy_retrieve",
+      "metadata": null,
+      "data_type": "RunnableCallable"
+    },
+    {
+      "id": "policy_rag_subgraph:policy_rerank",
+      "name": "policy_rerank",
+      "metadata": null,
+      "data_type": "RunnableCallable"
+    },
+    {
+      "id": "policy_rag_subgraph:policy_generate",
+      "name": "policy_generate",
+      "metadata": null,
+      "data_type": "RunnableCallable"
+    },
+    {
+      "id": "handoff_subgraph:handoff_reserve_node",
+      "name": "handoff_reserve_node",
+      "metadata": null,
+      "data_type": "RunnableCallable"
+    }
+  ],
+  "edges": [
+    {
+      "source": "__start__",
+      "target": "memory_manager",
+      "conditional": false,
+      "data": null
+    },
+    {
+      "source": "handoff_subgraph:handoff_reserve_node",
+      "target": "supervisor_router",
+      "conditional": false,
+      "data": null
+    },
+    {
+      "source": "memory_manager",
+      "target": "supervisor_router",
+      "conditional": false,
+      "data": null
+    },
+    {
+      "source": "policy_rag_subgraph:policy_generate",
+      "target": "supervisor_router",
+      "conditional": false,
+      "data": null
+    },
+    {
+      "source": "recommend_subgraph:recommend_finalize",
+      "target": "supervisor_router",
+      "conditional": false,
+      "data": null
+    },
+    {
+      "source": "supervisor_router",
+      "target": "__end__",
+      "conditional": true,
+      "data": null
+    },
+    {
+      "source": "supervisor_router",
+      "target": "empathy_generator",
+      "conditional": true,
+      "data": null
+    },
+    {
+      "source": "supervisor_router",
+      "target": "handoff_subgraph:handoff_reserve_node",
+      "conditional": true,
+      "data": null
+    },
+    {
+      "source": "supervisor_router",
+      "target": "policy_rag_subgraph:policy_rewrite",
+      "conditional": true,
+      "data": null
+    },
+    {
+      "source": "supervisor_router",
+      "target": "recommend_subgraph:__start__",
+      "conditional": true,
+      "data": null
+    },
+    {
+      "source": "empathy_generator",
+      "target": "__end__",
+      "conditional": false,
+      "data": null
+    },
+    {
+      "source": "recommend_subgraph:__start__",
+      "target": "recommend_subgraph:recommend_llm",
+      "conditional": false,
+      "data": null
+    },
+    {
+      "source": "recommend_subgraph:recommend_llm",
+      "target": "recommend_subgraph:recommend_finalize",
+      "conditional": true,
+      "data": "__end__"
+    },
+    {
+      "source": "recommend_subgraph:recommend_llm",
+      "target": "recommend_subgraph:recommend_tools",
+      "conditional": true,
+      "data": "tools"
+    },
+    {
+      "source": "recommend_subgraph:recommend_tools",
+      "target": "recommend_subgraph:recommend_llm",
+      "conditional": false,
+      "data": null
+    },
+    {
+      "source": "policy_rag_subgraph:policy_rerank",
+      "target": "policy_rag_subgraph:policy_generate",
+      "conditional": false,
+      "data": null
+    },
+    {
+      "source": "policy_rag_subgraph:policy_retrieve",
+      "target": "policy_rag_subgraph:policy_rerank",
+      "conditional": false,
+      "data": null
+    },
+    {
+      "source": "policy_rag_subgraph:policy_rewrite",
+      "target": "policy_rag_subgraph:policy_retrieve",
+      "conditional": false,
+      "data": null
+    }
+  ]
+}

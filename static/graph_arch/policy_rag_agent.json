@@ -1,0 +1,74 @@
+{
+  "node_count": 6,
+  "edge_count": 5,
+  "nodes": [
+    {
+      "id": "__start__",
+      "name": "__start__",
+      "metadata": null,
+      "data_type": "RunnableCallable"
+    },
+    {
+      "id": "policy_rewrite",
+      "name": "policy_rewrite",
+      "metadata": null,
+      "data_type": "RunnableCallable"
+    },
+    {
+      "id": "policy_retrieve",
+      "name": "policy_retrieve",
+      "metadata": null,
+      "data_type": "RunnableCallable"
+    },
+    {
+      "id": "policy_rerank",
+      "name": "policy_rerank",
+      "metadata": null,
+      "data_type": "RunnableCallable"
+    },
+    {
+      "id": "policy_generate",
+      "name": "policy_generate",
+      "metadata": null,
+      "data_type": "RunnableCallable"
+    },
+    {
+      "id": "__end__",
+      "name": "__end__",
+      "metadata": null,
+      "data_type": "NoneType"
+    }
+  ],
+  "edges": [
+    {
+      "source": "__start__",
+      "target": "policy_rewrite",
+      "conditional": false,
+      "data": null
+    },
+    {
+      "source": "policy_rerank",
+      "target": "policy_generate",
+      "conditional": false,
+      "data": null
+    },
+    {
+      "source": "policy_retrieve",
+      "target": "policy_rerank",
+      "conditional": false,
+      "data": null
+    },
+    {
+      "source": "policy_rewrite",
+      "target": "policy_retrieve",
+      "conditional": false,
+      "data": null
+    },
+    {
+      "source": "policy_generate",
+      "target": "__end__",
+      "conditional": false,
+      "data": null
+    }
+  ]
+}

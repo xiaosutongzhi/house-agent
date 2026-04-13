@@ -234,6 +234,17 @@ def policy_rewrite_node(state: State, runtime: Runtime[ContextSchema], *, store:
 
 def policy_retrieve_node(state: State):
     query_data = state.get("policy_query") or {}
+    if not isinstance(query_data, dict):
+        query_data = {}
+
+    # 网关/状态兼容兜底：若缺失 rewritten_query，不抛错，回退为用户原问题。
+    if not query_data.get("rewritten_query"):
+        question = ""
+        msgs = state.get("messages") or []
+        if msgs:
+            question = str(getattr(msgs[-1], "content", "") or "")
+        query_data = {**query_data, "rewritten_query": question or "政策查询"}
+
     query = PolicyQuery(**query_data)
     contexts = _build_contexts(query)
     return {"policy_contexts": contexts}

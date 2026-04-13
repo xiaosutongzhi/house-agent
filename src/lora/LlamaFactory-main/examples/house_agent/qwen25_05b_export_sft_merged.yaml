@@ -1,0 +1,11 @@
+### model
+model_name_or_path: /mnt/nas/szm/model/models--Qwen--Qwen2.5-0.5B
+adapter_name_or_path: saves/qwen25-0_5b/qlora/sft_house_agent_schema
+template: qwen
+trust_remote_code: true
+
+### export
+export_dir: saves/qwen25-0_5b/sft_merged_hf
+export_size: 5
+export_device: cpu
+export_legacy_format: false
